@@ -276,14 +276,22 @@ class ProductsController {
 
   async index(request: FastifyRequest, reply: FastifyReply) {
     try {
+      console.log('📋 Buscando produtos no banco de dados...')
+      console.log(
+        '🔗 DATABASE_URL:',
+        process.env.DATABASE_URL ? 'Configurada' : 'Não configurada'
+      )
+
       const products = await prisma.product.findMany({
         orderBy: {
           createdAt: 'desc',
         },
       })
 
+      console.log(`✅ ${products.length} produtos encontrados`)
       return reply.send(products)
     } catch (error) {
+      console.error('❌ Erro ao buscar produtos:', error)
       throw error
     }
   }

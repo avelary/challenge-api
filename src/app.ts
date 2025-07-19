@@ -68,6 +68,37 @@ app.get('/', async (request, reply) => {
   }
 })
 
+// Database test endpoint
+app.get('/db-test', async (request, reply) => {
+  try {
+    console.log('🔍 Testando conexão com banco de dados...')
+    const { prisma } = require('./database/prisma')
+
+    // Testar conexão
+    await prisma.$connect()
+    console.log('✅ Conexão com banco estabelecida')
+
+    // Testar query simples
+    const count = await prisma.product.count()
+    console.log(`📊 Total de produtos: ${count}`)
+
+    return {
+      status: 'ok',
+      database: 'connected',
+      products_count: count,
+      timestamp: new Date().toISOString(),
+    }
+  } catch (error) {
+    console.error('❌ Erro na conexão com banco:', error)
+    return reply.status(500).send({
+      status: 'error',
+      database: 'disconnected',
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    })
+  }
+})
+
 registerPlugins()
 
 export { app }
