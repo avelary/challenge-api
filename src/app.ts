@@ -1,5 +1,26 @@
 import Fastify from 'fastify'
 import { UPLOADS_DIR } from './config'
+import fs from 'fs'
+import path from 'path'
+
+// Criar diretório uploads se não existir
+const ensureUploadsDir = () => {
+  try {
+    if (!fs.existsSync(UPLOADS_DIR)) {
+      console.log(`📁 Criando diretório: ${UPLOADS_DIR}`)
+      fs.mkdirSync(UPLOADS_DIR, { recursive: true })
+      console.log('✅ Diretório uploads criado com sucesso')
+    } else {
+      console.log(`📁 Diretório já existe: ${UPLOADS_DIR}`)
+    }
+  } catch (error) {
+    console.error('❌ Erro ao criar diretório uploads:', error)
+    // Não falhar se não conseguir criar o diretório
+  }
+}
+
+// Criar diretório na inicialização
+ensureUploadsDir()
 
 const app = Fastify({
   logger: true,
