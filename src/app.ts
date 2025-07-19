@@ -42,7 +42,22 @@ app.setErrorHandler((error, request, reply) => {
 
 // Health check
 app.get('/health', async (request, reply) => {
-  return { status: 'ok', timestamp: new Date().toISOString() }
+  console.log('🏥 Health check requested')
+  return {
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    port: process.env.PORT || '10000',
+  }
+})
+
+// Root endpoint
+app.get('/', async (request, reply) => {
+  return {
+    message: 'Business API is running!',
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+  }
 })
 
 registerPlugins()
