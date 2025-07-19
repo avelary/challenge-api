@@ -1,5 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify'
-import { prisma } from '../database/prisma'
+import { getPrisma } from '../database/prisma'
 import { AppError } from '../utils/AppError'
 import {
   createProductSchema,
@@ -12,6 +12,7 @@ class ProductsController {
   async create(request: FastifyRequest, reply: FastifyReply) {
     try {
       const validatedData = createProductSchema.parse(request.body)
+      const prisma = await getPrisma()
 
       const product = await prisma.product.create({
         data: validatedData,
@@ -226,6 +227,7 @@ class ProductsController {
       console.log('💾 Salvando produto no banco de dados...')
 
       // Criar produto no banco
+      const prisma = await getPrisma()
       const product = await prisma.product.create({
         data: validatedData,
       })
@@ -282,6 +284,7 @@ class ProductsController {
         process.env.DATABASE_URL ? 'Configurada' : 'Não configurada'
       )
 
+      const prisma = await getPrisma()
       const products = await prisma.product.findMany({
         orderBy: {
           createdAt: 'desc',
@@ -299,6 +302,7 @@ class ProductsController {
   async delete(request: FastifyRequest, reply: FastifyReply) {
     try {
       const { idsku } = deleteProductParamsSchema.parse(request.params)
+      const prisma = await getPrisma()
 
       const product = await prisma.product.findUnique({
         where: { idsku },

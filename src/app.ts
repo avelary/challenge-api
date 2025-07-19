@@ -30,9 +30,10 @@ app.get('/', async (request, reply) => {
 app.get('/db-test', async (request, reply) => {
   try {
     console.log('🔍 Testando conexão com banco de dados...')
-    const { prisma } = require('./database/prisma')
+    const { getPrisma } = require('./database/prisma')
 
     // Testar conexão
+    const prisma = await getPrisma()
     await prisma.$connect()
     console.log('✅ Conexão com banco estabelecida')
 
