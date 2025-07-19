@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx watch --env-file .env src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start": "prisma migrate deploy && node dist/server.js",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:push": "prisma db push"
