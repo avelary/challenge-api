@@ -79,6 +79,47 @@ app.get('/db-test', async (request, reply) => {
   }
 })
 
+// Uploads directory test endpoint
+app.get('/uploads-test', async (request, reply) => {
+  try {
+    console.log('🔍 Testando diretório uploads...')
+
+    const uploadsExists = fs.existsSync(UPLOADS_DIR)
+    const uploadsPath = UPLOADS_DIR
+
+    if (uploadsExists) {
+      const files = fs.readdirSync(UPLOADS_DIR)
+      console.log(`📁 Diretório uploads existe: ${uploadsPath}`)
+      console.log(`📄 Arquivos no diretório: ${files.length}`)
+
+      return {
+        status: 'ok',
+        uploads_directory: 'exists',
+        path: uploadsPath,
+        files_count: files.length,
+        files: files.slice(0, 10), // Mostrar apenas os primeiros 10 arquivos
+        timestamp: new Date().toISOString(),
+      }
+    } else {
+      console.log(`❌ Diretório uploads não existe: ${uploadsPath}`)
+      return reply.status(500).send({
+        status: 'error',
+        uploads_directory: 'not_exists',
+        path: uploadsPath,
+        timestamp: new Date().toISOString(),
+      })
+    }
+  } catch (error) {
+    console.error('❌ Erro ao verificar diretório uploads:', error)
+    return reply.status(500).send({
+      status: 'error',
+      uploads_directory: 'error',
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    })
+  }
+})
+
 // Registrar plugins
 const registerPlugins = async () => {
   // CORS
@@ -99,6 +140,8 @@ const registerPlugins = async () => {
   await app.register(require('@fastify/static'), {
     root: UPLOADS_DIR,
     prefix: '/uploads/',
+    decorateReply: false,
+    schemaHide: true,
   })
 
   // Multipart for file uploads
