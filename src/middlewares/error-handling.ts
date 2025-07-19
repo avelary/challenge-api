@@ -1,23 +1,22 @@
-import { Request, Response, NextFunction } from 'express'
+import { FastifyRequest, FastifyReply } from 'fastify'
 import { AppError } from '../utils/AppError'
 import { ZodError } from 'zod'
 
 export function errorHandling(
   error: any,
-  request: Request,
-  response: Response,
-  next: NextFunction
+  request: FastifyRequest,
+  reply: FastifyReply
 ) {
   if (error instanceof AppError) {
-    return response.status(error.statusCode).json({ message: error.message })
+    return reply.status(error.statusCode).send({ message: error.message })
   }
 
   if (error instanceof ZodError) {
-    return response.status(400).json({
+    return reply.status(400).send({
       message: 'validation error',
       issues: error.format(),
     })
   }
 
-  response.status(500).json({ message: error.message })
+  reply.status(500).send({ message: error.message })
 }
