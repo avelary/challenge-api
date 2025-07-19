@@ -10,8 +10,16 @@ const app = Fastify({
 const registerPlugins = async () => {
   // CORS
   await app.register(require('@fastify/cors'), {
-    origin: ['http://localhost:3000'],
+    origin: [
+      'http://localhost:3000',
+      'https://challenge-three-inky.vercel.app',
+      'https://challenge-git-main-yagoavelars-projects.vercel.app',
+      'https://challenge-3hxolw6m2-yagoavelars-projects.vercel.app',
+      /^https:\/\/challenge.*\.vercel\.app$/,
+    ],
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 
   // Static files

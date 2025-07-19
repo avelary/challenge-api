@@ -1,8 +1,13 @@
 import OpenAI from 'openai'
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+// Inicializar OpenAI apenas se a chave estiver configurada
+let openai: OpenAI | null = null
+
+if (process.env.OPENAI_API_KEY) {
+  openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  })
+}
 
 export interface GeneratedProduct {
   title: string
@@ -24,8 +29,13 @@ export class OpenAIService {
     if (!process.env.OPENAI_API_KEY) {
       console.error('❌ OPENAI_API_KEY não configurada')
       throw new Error(
-        'Chave da OpenAI não configurada. Verifique o arquivo .env'
+        'Chave da OpenAI não configurada. Verifique as variáveis de ambiente'
       )
+    }
+
+    if (!openai) {
+      console.error('❌ Cliente OpenAI não inicializado')
+      throw new Error('Cliente OpenAI não disponível')
     }
 
     if (process.env.OPENAI_API_KEY === 'sua-chave-da-openai-aqui') {
@@ -89,7 +99,7 @@ RETORNE APENAS UM JSON válido no formato:
     try {
       console.log('📤 Enviando requisição para OpenAI...')
 
-      const completion = await openai.chat.completions.create({
+      const completion = await openai!.chat.completions.create({
         model: 'gpt-4o-mini', // Usar modelo mais barato e com limites maiores
         messages: [
           {
@@ -317,6 +327,11 @@ RETORNE APENAS UM JSON válido no formato:
   static async generateFallbackProduct(): Promise<GeneratedProduct> {
     console.log('🔄 Usando método fallback simples...')
 
+    if (!openai) {
+      console.error('❌ Cliente OpenAI não inicializado para fallback')
+      throw new Error('Cliente OpenAI não disponível para fallback')
+    }
+
     const prompt = `
 Gere um produto de vestuário (camiseta preta) seguindo EXATAMENTE as regras:
 
@@ -337,7 +352,7 @@ RETORNE APENAS UM JSON válido:
 `
 
     try {
-      const completion = await openai.chat.completions.create({
+      const completion = await openai!.chat.completions.create({
         model: 'gpt-3.5-turbo',
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 200,
