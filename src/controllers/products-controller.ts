@@ -122,7 +122,10 @@ class ProductsController {
       try {
         // Tentar análise com IA primeiro
         console.log('🔍 Tentando análise com OpenAI Vision...')
-        generatedProduct = await OpenAIService.analyzeProductImage(imageBase64)
+        generatedProduct = await OpenAIService.analyzeProductImage(
+          imageBase64,
+          data.mimetype
+        )
         console.log('✅ Análise com IA Vision bem sucedida')
       } catch (aiError: any) {
         console.error('❌ Falha na análise com IA Vision:', aiError.message)
@@ -290,6 +293,7 @@ class ProductsController {
 
       // Verificar se todos são imagens e processar
       const imagesBase64: string[] = []
+      const mimeTypes: string[] = []
       let totalSizeMB = 0
 
       for (let i = 0; i < files.length; i++) {
@@ -328,6 +332,7 @@ class ProductsController {
         // Converter imagem para base64
         const imageBase64 = buffer.toString('base64')
         imagesBase64.push(imageBase64)
+        mimeTypes.push(file.mimetype)
 
         console.log(
           `📊 Imagem ${i + 1} - Base64: ${Math.round(
@@ -347,7 +352,8 @@ class ProductsController {
           '🔍 Tentando análise com OpenAI Vision (múltiplas imagens)...'
         )
         generatedProduct = await OpenAIService.analyzeMultipleProductImages(
-          imagesBase64
+          imagesBase64,
+          mimeTypes
         )
         console.log('✅ Análise com IA Vision (múltiplas imagens) bem sucedida')
       } catch (aiError: any) {
@@ -372,7 +378,8 @@ class ProductsController {
           )
           try {
             generatedProduct = await OpenAIService.analyzeProductImage(
-              imagesBase64[0]
+              imagesBase64[0],
+              mimeTypes[0]
             )
             analysisMethod = 'ai-vision-single-fallback'
             console.log('✅ Análise com primeira imagem bem sucedida')
@@ -402,7 +409,8 @@ class ProductsController {
           console.log('🔄 Tentando análise com primeira imagem...')
           try {
             generatedProduct = await OpenAIService.analyzeProductImage(
-              imagesBase64[0]
+              imagesBase64[0],
+              mimeTypes[0]
             )
             analysisMethod = 'ai-vision-single-fallback'
             console.log('✅ Análise com primeira imagem bem sucedida')

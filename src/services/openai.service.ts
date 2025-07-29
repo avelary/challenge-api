@@ -21,7 +21,8 @@ export interface GeneratedProduct {
 
 export class OpenAIService {
   static async analyzeProductImage(
-    imageBase64: string
+    imageBase64: string,
+    mimeType: string = 'image/jpeg'
   ): Promise<GeneratedProduct> {
     console.log('🤖 Iniciando análise da imagem com OpenAI Vision...')
 
@@ -121,7 +122,7 @@ RETORNE APENAS UM JSON válido no formato:
               {
                 type: 'image_url',
                 image_url: {
-                  url: `data:image/jpeg;base64,${imageBase64}`,
+                  url: `data:${mimeType};base64,${imageBase64}`,
                   detail: 'low', // Usar resolução baixa para economizar tokens
                 },
               },
@@ -245,7 +246,8 @@ RETORNE APENAS UM JSON válido no formato:
 
   // Novo método para analisar múltiplas imagens
   static async analyzeMultipleProductImages(
-    imagesBase64: string[]
+    imagesBase64: string[],
+    mimeTypes: string[] = []
   ): Promise<GeneratedProduct> {
     console.log(
       `🤖 Iniciando análise de ${imagesBase64.length} imagens com OpenAI Vision...`
@@ -358,14 +360,15 @@ RETORNE APENAS UM JSON válido no formato:
 
       // Adicionar cada imagem ao conteúdo
       imagesBase64.forEach((base64, index) => {
+        const mimeType = mimeTypes[index] || 'image/jpeg'
         content.push({
           type: 'image_url',
           image_url: {
-            url: `data:image/jpeg;base64,${base64}`,
+            url: `data:${mimeType};base64,${base64}`,
             detail: 'low', // Usar resolução baixa para economizar tokens
           },
         })
-        console.log(`📷 Imagem ${index + 1} adicionada ao prompt`)
+        console.log(`📷 Imagem ${index + 1} (${mimeType}) adicionada ao prompt`)
       })
 
       const completion = await openai!.chat.completions.create({
