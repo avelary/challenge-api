@@ -126,6 +126,12 @@ class ProductsController {
         console.log('✅ Análise com IA Vision bem sucedida')
       } catch (aiError: any) {
         console.error('❌ Falha na análise com IA Vision:', aiError.message)
+        console.error('🔍 DEBUG - Erro completo da OpenAI:', {
+          status: aiError.status,
+          message: aiError.message,
+          type: aiError.type,
+          code: aiError.code,
+        })
 
         // Se é rate limit, usar fallback inteligente
         if (aiError.message === 'RATE_LIMIT') {
@@ -346,6 +352,15 @@ class ProductsController {
         console.log('✅ Análise com IA Vision (múltiplas imagens) bem sucedida')
       } catch (aiError: any) {
         console.error('❌ Falha na análise com IA Vision:', aiError.message)
+        console.error(
+          '🔍 DEBUG - Erro completo da OpenAI (múltiplas imagens):',
+          {
+            status: aiError.status,
+            message: aiError.message,
+            type: aiError.type,
+            code: aiError.code,
+          }
+        )
 
         // Se é rate limit ou múltiplas imagens falham, tentar com apenas a primeira imagem
         if (
