@@ -280,35 +280,60 @@ class ProductsController {
       console.log('🔄 STEP 2.1: Iniciando loop de arquivos...')
       let fileCount = 0
 
-      for await (const part of request.parts()) {
-        console.log(
-          `🔄 STEP 2.1.${fileCount + 1}: Processando part - type: ${
-            part.type
-          }, fieldname: ${part.fieldname}`
-        )
-
-        if (part.type === 'file' && part.fieldname === 'images') {
-          fileCount++
+      // Adicionar timeout para o loop completo
+      let partCount = 0
+      const partsPromise = (async () => {
+        for await (const part of request.parts()) {
+          partCount++
           console.log(
-            `📁 STEP 2.1.${fileCount}: Arquivo encontrado - ${part.filename} (${part.mimetype})`
+            `🔄 STEP 2.1.${partCount}: Processando part ${partCount} - type: ${
+              part.type
+            }, fieldname: ${part.fieldname || 'undefined'}`
           )
 
-          // Adicionar timeout para evitar travamento
-          const fileProcessStart = Date.now()
-          files.push(part)
-          console.log(
-            `✅ STEP 2.1.${fileCount}: Arquivo ${part.filename} adicionado em ${
-              Date.now() - fileProcessStart
-            }ms`
-          )
-        } else {
-          console.log(
-            `⏭️ STEP 2.1: Ignorando part - type: ${part.type}, fieldname: ${part.fieldname}`
-          )
+          if (part.type === 'file' && part.fieldname === 'images') {
+            fileCount++
+            console.log(
+              `📁 STEP 2.1.${partCount}: Arquivo ${fileCount} encontrado - ${part.filename} (${part.mimetype})`
+            )
+
+            const fileProcessStart = Date.now()
+            files.push(part)
+            console.log(
+              `✅ STEP 2.1.${partCount}: Arquivo ${
+                part.filename
+              } adicionado em ${Date.now() - fileProcessStart}ms`
+            )
+          } else if (part.type === 'field') {
+            console.log(
+              `📝 STEP 2.1.${partCount}: Campo encontrado - ${part.fieldname}: ${part.value}`
+            )
+          } else {
+            console.log(
+              `⏭️ STEP 2.1.${partCount}: Ignorando part - type: ${part.type}, fieldname: ${part.fieldname}`
+            )
+          }
         }
-      }
+        console.log(
+          `🔚 STEP 2.1: Loop terminado! Total de ${partCount} parts processadas`
+        )
+      })()
 
-      console.log(`✅ STEP 2.1 FINAL: ${fileCount} arquivos coletados`)
+      // Timeout de 20 segundos para o loop
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          console.error(
+            `❌ TIMEOUT: Loop demorou mais de 20s (${partCount} parts processadas)`
+          )
+          reject(new Error('Timeout processando upload'))
+        }, 20000)
+      })
+
+      await Promise.race([partsPromise, timeoutPromise])
+
+      console.log(
+        `✅ STEP 2.1 FINAL: ${fileCount} arquivos coletados de ${partCount} parts totais`
+      )
 
       console.log(
         `⏱️ STEP 2 COMPLETO: Coleta levou ${Date.now() - collectStartTime}ms`
