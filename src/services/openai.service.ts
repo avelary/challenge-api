@@ -61,50 +61,18 @@ export class OpenAIService {
       console.warn('⚠️ Imagem muito grande, pode causar problemas')
     }
 
-    const prompt = `
-Analise esta imagem de produto e extraia as seguintes informações EXATAMENTE conforme as regras:
-
-TIPOS PERMITIDOS:
-- souvenir (para souvenirs, lembranças, artesanato)
-- menu (para comidas, bebidas, pratos)
-- vestuario (para roupas, acessórios vestíveis)
-
-CLASSIFICAÇÕES POR TIPO:
-- souvenir: artesanato, colecionavel, local
-- menu: entrada, prato_principal, bebida
-- vestuario: camiseta, bone, moletom
-
-CATEGORIAS POR CLASSIFICAÇÃO:
-- artesanato: madeira, ceramica, tecido
-- colecionavel: moeda, selo, miniatura
-- local: lembranca, cartao_postal, imas
-- entrada: salada, sopa, petisco
-- prato_principal: carne, peixe, vegetariano
-- bebida: suco, refrigerante, alcoolica
-- camiseta: manga_curta, manga_longa, regata
-- bone: aba_reta, aba_curva, trucker
-- moletom: com_capuz, sem_capuz, ziper
-
-INSTRUÇÕES:
-1. Identifique o que você vê na imagem
-2. Classifique o produto no tipo mais adequado (souvenir, menu ou vestuario)
-3. Escolha a classificação e categoria corretas
-4. Crie um título descritivo baseado no que você vê
-5. Escreva uma descrição detalhada do produto visível
-6. Estime um preço justo entre R$ 10 e R$ 300
-7. Defina uma oferta menor que o preço
-
-RETORNE APENAS UM JSON válido no formato:
+    const prompt = `Analise esta imagem e retorne APENAS um JSON válido:
 {
-  "title": "Nome descritivo baseado na imagem",
-  "productType": "tipo_identificado",
-  "classification": "classificacao_adequada", 
-  "category": "categoria_adequada",
-  "description": "Descrição detalhada do que vê na imagem",
-  "price": numero_preco_estimado,
-  "offer": numero_oferta_menor
+  "title": "Nome do produto",
+  "productType": "vestuario", 
+  "classification": "camiseta",
+  "category": "manga_curta",
+  "description": "Descrição breve",
+  "price": 50,
+  "offer": 40
 }
-`
+
+Tipos: souvenir, menu, vestuario. Seja direto e conciso.`
 
     try {
       console.log('📤 Enviando requisição para OpenAI...')
@@ -129,7 +97,7 @@ RETORNE APENAS UM JSON válido no formato:
             ],
           },
         ],
-        max_tokens: 200, // Reduzir ainda mais para evitar custos
+        max_tokens: 120, // Reduzir para ser mais rápido
         temperature: 0.1, // Mais determinístico
         frequency_penalty: 0,
         presence_penalty: 0,
@@ -299,53 +267,18 @@ RETORNE APENAS UM JSON válido no formato:
       console.warn('⚠️ Imagens muito grandes, pode causar problemas')
     }
 
-    const prompt = `
-Analise estas ${imagesBase64.length} imagens do MESMO produto e extraia as seguintes informações EXATAMENTE conforme as regras:
-
-IMPORTANTE: As imagens mostram diferentes ângulos/perspectivas do MESMO produto. Use todas as imagens para criar uma análise mais completa e precisa.
-
-TIPOS PERMITIDOS:
-- souvenir (para souvenirs, lembranças, artesanato)
-- menu (para comidas, bebidas, pratos)
-- vestuario (para roupas, acessórios vestíveis)
-
-CLASSIFICAÇÕES POR TIPO:
-- souvenir: artesanato, colecionavel, local
-- menu: entrada, prato_principal, bebida
-- vestuario: camiseta, bone, moletom
-
-CATEGORIAS:
-- artesanato: madeira, ceramica, tecido
-- colecionavel: moeda, selo, figurinha
-- local: lembranca, cartao_postal, imas
-- entrada: salada, sopa, petisco
-- prato_principal: carne, peixe, vegetariano
-- bebida: suco, refrigerante, alcoolica
-- camiseta: manga_curta, manga_longa, regata
-- bone: aba_reta, aba_curva, trucker
-- moletom: com_capuz, sem_capuz, ziper
-
-INSTRUÇÕES:
-1. Analise TODAS as imagens para identificar o produto
-2. Use informações de todas as imagens para criar uma descrição mais completa
-3. Classifique o produto no tipo mais adequado (souvenir, menu ou vestuario)
-4. Escolha a classificação e categoria corretas
-5. Crie um título descritivo baseado no que você vê em todas as imagens
-6. Escreva uma descrição detalhada considerando todos os ângulos/detalhes visíveis
-7. Estime um preço justo entre R$ 10 e R$ 300
-8. Defina uma oferta menor que o preço
-
-RETORNE APENAS UM JSON válido no formato:
+    const prompt = `Analise essas ${imagesBase64.length} imagens do mesmo produto. Retorne APENAS um JSON válido:
 {
-  "title": "Nome descritivo baseado em todas as imagens",
-  "productType": "tipo_identificado",
-  "classification": "classificacao_adequada", 
-  "category": "categoria_adequada",
-  "description": "Descrição detalhada considerando todas as imagens",
-  "price": numero_preco_estimado,
-  "offer": numero_oferta_menor
+  "title": "Nome do produto",
+  "productType": "menu", 
+  "classification": "bebida",
+  "category": "refrigerante",
+  "description": "Descrição breve considerando todas as imagens",
+  "price": 50,
+  "offer": 40
 }
-`
+
+Tipos: souvenir, menu, vestuario. Use TODAS as imagens para análise completa.`
 
     try {
       console.log('📤 Enviando requisição para OpenAI com múltiplas imagens...')
@@ -379,7 +312,7 @@ RETORNE APENAS UM JSON válido no formato:
             content,
           },
         ],
-        max_tokens: 250, // Aumentar um pouco para múltiplas imagens mas manter econômico
+        max_tokens: 100, // Ainda mais rápido para múltiplas imagens
         temperature: 0.1, // Mais determinístico
         frequency_penalty: 0,
         presence_penalty: 0,

@@ -265,6 +265,7 @@ class ProductsController {
   // Novo método para processar múltiplas imagens
   async generateWithMultipleAI(request: FastifyRequest, reply: FastifyReply) {
     console.log('🚀 Iniciando processamento de múltiplas imagens com IA...')
+    const startTime = Date.now()
 
     try {
       // Coletar todas as imagens do upload
@@ -290,6 +291,7 @@ class ProductsController {
       }
 
       console.log(`📁 ${files.length} arquivos recebidos`)
+      console.log(`⏱️ Tempo para coletar arquivos: ${Date.now() - startTime}ms`)
 
       // Verificar se todos são imagens e processar
       const imagesBase64: string[] = []
@@ -342,6 +344,9 @@ class ProductsController {
       }
 
       console.log(`📊 Tamanho total: ${totalSizeMB.toFixed(2)} MB`)
+      console.log(
+        `⏱️ Tempo para processar todas as imagens: ${Date.now() - startTime}ms`
+      )
 
       let generatedProduct
       let analysisMethod = 'ai-vision-multiple'
@@ -351,11 +356,13 @@ class ProductsController {
         console.log(
           '🔍 Tentando análise com OpenAI Vision (múltiplas imagens)...'
         )
+        const openaiStartTime = Date.now()
         generatedProduct = await OpenAIService.analyzeMultipleProductImages(
           imagesBase64,
           mimeTypes
         )
         console.log('✅ Análise com IA Vision (múltiplas imagens) bem sucedida')
+        console.log(`⏱️ Tempo OpenAI: ${Date.now() - openaiStartTime}ms`)
       } catch (aiError: any) {
         console.error('❌ Falha na análise com IA Vision:', aiError.message)
         console.error(
