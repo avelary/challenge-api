@@ -286,8 +286,8 @@ class ProductsController {
         )
       }
 
-      if (files.length > 5) {
-        throw new AppError('Máximo de 5 imagens permitidas', 400)
+      if (files.length > 3) {
+        throw new AppError('Máximo de 3 imagens permitidas', 400)
       }
 
       console.log(`📁 ${files.length} arquivos recebidos`)

@@ -77,31 +77,39 @@ Tipos: souvenir, menu, vestuario. Seja direto e conciso.`
     try {
       console.log('📤 Enviando requisição para OpenAI...')
 
-      const completion = await openai!.chat.completions.create({
-        model: 'gpt-4o-mini', // Modelo mais econômico e confiável
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: prompt,
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: `data:${mimeType};base64,${imageBase64}`,
-                  detail: 'low', // Usar resolução baixa para economizar tokens
-                },
-              },
-            ],
-          },
-        ],
-        max_tokens: 120, // Reduzir para ser mais rápido
-        temperature: 0.1, // Mais determinístico
-        frequency_penalty: 0,
-        presence_penalty: 0,
+      // Timeout de 8 segundos para imagem única
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(
+          () => reject(new Error('TIMEOUT - OpenAI demorou mais que 8s')),
+          8000
+        )
       })
+
+      const completion = (await Promise.race([
+        openai!.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: prompt },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:${mimeType};base64,${imageBase64}`,
+                    detail: 'low',
+                  },
+                },
+              ],
+            },
+          ],
+          max_tokens: 80, // Reduzir ainda mais
+          temperature: 0.1,
+          frequency_penalty: 0,
+          presence_penalty: 0,
+        }),
+        timeoutPromise,
+      ])) as any
 
       console.log('📥 Resposta recebida da OpenAI')
       console.log('🔍 Usage:', completion.usage)
@@ -249,8 +257,8 @@ Tipos: souvenir, menu, vestuario. Seja direto e conciso.`
     }
 
     // Verificar limite de imagens
-    if (imagesBase64.length > 5) {
-      throw new Error('Máximo de 5 imagens permitidas')
+    if (imagesBase64.length > 3) {
+      throw new Error('Máximo de 3 imagens permitidas')
     }
 
     if (imagesBase64.length === 0) {
@@ -267,18 +275,8 @@ Tipos: souvenir, menu, vestuario. Seja direto e conciso.`
       console.warn('⚠️ Imagens muito grandes, pode causar problemas')
     }
 
-    const prompt = `Analise essas ${imagesBase64.length} imagens do mesmo produto. Retorne APENAS um JSON válido:
-{
-  "title": "Nome do produto",
-  "productType": "menu", 
-  "classification": "bebida",
-  "category": "refrigerante",
-  "description": "Descrição breve considerando todas as imagens",
-  "price": 50,
-  "offer": 40
-}
-
-Tipos: souvenir, menu, vestuario. Use TODAS as imagens para análise completa.`
+    const prompt = `JSON APENAS:
+{"title":"Nome","productType":"menu","classification":"bebida","category":"refrigerante","description":"Breve","price":50,"offer":40}`
 
     try {
       console.log('📤 Enviando requisição para OpenAI com múltiplas imagens...')
@@ -304,19 +302,25 @@ Tipos: souvenir, menu, vestuario. Use TODAS as imagens para análise completa.`
         console.log(`📷 Imagem ${index + 1} (${mimeType}) adicionada ao prompt`)
       })
 
-      const completion = await openai!.chat.completions.create({
-        model: 'gpt-4o-mini', // Modelo mais econômico e confiável
-        messages: [
-          {
-            role: 'user',
-            content,
-          },
-        ],
-        max_tokens: 100, // Ainda mais rápido para múltiplas imagens
-        temperature: 0.1, // Mais determinístico
-        frequency_penalty: 0,
-        presence_penalty: 0,
+      // Timeout de 10 segundos
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(
+          () => reject(new Error('TIMEOUT - OpenAI demorou mais que 10s')),
+          10000
+        )
       })
+
+      const completion = (await Promise.race([
+        openai!.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content }],
+          max_tokens: 50,
+          temperature: 0.1,
+          frequency_penalty: 0,
+          presence_penalty: 0,
+        }),
+        timeoutPromise,
+      ])) as any
 
       console.log('📥 Resposta recebida da OpenAI')
       console.log('🔍 Usage:', completion.usage)
