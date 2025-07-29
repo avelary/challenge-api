@@ -33,23 +33,27 @@ export const createProductSchema = z.object({
   price: z
     .number()
     .min(0)
-    .or(z.string().refine(val => !isNaN(Number(val)), 'Price must be a number'))
-    .transform(val => Number(val)),
+    .or(
+      z.string().refine((val) => !isNaN(Number(val)), 'Price must be a number')
+    )
+    .transform((val) => Number(val)),
 
   offer: z
     .number()
     .min(0)
-    .or(z.string().refine(val => !isNaN(Number(val)), 'Offer must be a number'))
-    .transform(val => Number(val)),
+    .or(
+      z.string().refine((val) => !isNaN(Number(val)), 'Offer must be a number')
+    )
+    .transform((val) => Number(val)),
 
-  description: z.string().max(255).optional().nullable(),
+  description: z.string().max(2000).optional().nullable(),
   remove: z.string().optional().nullable(),
   include: z.string().optional().nullable(),
   datasheet: z.string().optional().nullable(),
 })
 
 export const deleteProductParamsSchema = z.object({
-  idsku: z.string().transform(val => Number(val)),
+  idsku: z.string().transform((val) => Number(val)),
 })
 
 export type CreateProductInput = z.infer<typeof createProductSchema>

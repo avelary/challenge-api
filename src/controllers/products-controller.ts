@@ -193,7 +193,7 @@ class ProductsController {
 
       // Comprimir imagem para salvar no banco (máximo 1MB)
       console.log('🗜️ Comprimindo imagem para salvar no banco...')
-      const compressedBase64 = this.compressBase64Image(imageBase64, 1024) // 1MB max
+      const compressedBase64 = this.compressBase64Image(imageBase64)
       const compressedSizeKB = Math.round(
         (compressedBase64.length * 3) / 4 / 1024
       )
@@ -248,31 +248,234 @@ class ProductsController {
 
       return reply.status(201).send(response)
     } catch (error: any) {
-      console.error('❌ Erro completo no controller:', error)
+      console.error('❌ Erro no processamento:', error)
+      throw error
+    }
+  }
 
-      // Se já é um AppError, re-throw
-      if (error instanceof AppError) {
-        throw error
+  // Novo método para processar múltiplas imagens
+  async generateWithMultipleAI(request: FastifyRequest, reply: FastifyReply) {
+    console.log('🚀 Iniciando processamento de múltiplas imagens com IA...')
+
+    try {
+      // Coletar todas as imagens do upload
+      const files: MultipartFile[] = []
+
+      // Processar múltiplos arquivos
+      for await (const part of request.parts()) {
+        if (part.type === 'file' && part.fieldname === 'images') {
+          files.push(part)
+        }
       }
 
-      // Tratar erros específicos do Prisma
-      if (error.code === 'P2002') {
-        throw new AppError('Produto com dados duplicados', 400)
-      }
-
-      // Erro de constraint do MySQL (campo muito longo)
-      if (error.code === 'ER_DATA_TOO_LONG') {
+      if (files.length === 0) {
+        console.error('❌ Nenhum arquivo enviado')
         throw new AppError(
-          'Dados muito grandes. Tente com uma imagem menor.',
+          'Pelo menos uma imagem é obrigatória para análise da IA',
           400
         )
       }
 
-      // Erro genérico
-      throw new AppError(
-        error.message || 'Erro interno do servidor ao processar imagem',
-        500
+      if (files.length > 5) {
+        throw new AppError('Máximo de 5 imagens permitidas', 400)
+      }
+
+      console.log(`📁 ${files.length} arquivos recebidos`)
+
+      // Verificar se todos são imagens e processar
+      const imagesBase64: string[] = []
+      let totalSizeMB = 0
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        console.log(`📁 Arquivo ${i + 1}: ${file.filename} (${file.mimetype})`)
+
+        // Verificar se é uma imagem
+        if (!file.mimetype.startsWith('image/')) {
+          console.error(`❌ Arquivo ${i + 1} não é imagem: ${file.mimetype}`)
+          throw new AppError(`Arquivo ${i + 1} deve ser uma imagem`, 400)
+        }
+
+        // Verificar tamanho do arquivo
+        const buffer = await file.toBuffer()
+        const fileSizeMB = buffer.length / 1024 / 1024
+        totalSizeMB += fileSizeMB
+
+        if (fileSizeMB > 10) {
+          throw new AppError(
+            `Imagem ${i + 1} muito grande. Máximo 10MB permitido por imagem.`,
+            400
+          )
+        }
+
+        if (totalSizeMB > 25) {
+          throw new AppError(
+            'Tamanho total das imagens muito grande. Máximo 25MB no total.',
+            400
+          )
+        }
+
+        console.log(
+          `📊 Arquivo ${i + 1} - Tamanho: ${fileSizeMB.toFixed(2)} MB`
+        )
+
+        // Converter imagem para base64
+        const imageBase64 = buffer.toString('base64')
+        imagesBase64.push(imageBase64)
+
+        console.log(
+          `📊 Imagem ${i + 1} - Base64: ${Math.round(
+            (imageBase64.length * 3) / 4 / 1024
+          )} KB`
+        )
+      }
+
+      console.log(`📊 Tamanho total: ${totalSizeMB.toFixed(2)} MB`)
+
+      let generatedProduct
+      let analysisMethod = 'ai-vision-multiple'
+
+      try {
+        // Tentar análise com múltiplas imagens
+        console.log(
+          '🔍 Tentando análise com OpenAI Vision (múltiplas imagens)...'
+        )
+        generatedProduct = await OpenAIService.analyzeMultipleProductImages(
+          imagesBase64
+        )
+        console.log('✅ Análise com IA Vision (múltiplas imagens) bem sucedida')
+      } catch (aiError: any) {
+        console.error('❌ Falha na análise com IA Vision:', aiError.message)
+
+        // Se é rate limit ou múltiplas imagens falham, tentar com apenas a primeira imagem
+        if (
+          aiError.message === 'RATE_LIMIT' ||
+          aiError.message.includes('muito grandes')
+        ) {
+          console.log(
+            '⚠️ Fallback: tentando análise apenas com a primeira imagem...'
+          )
+          try {
+            generatedProduct = await OpenAIService.analyzeProductImage(
+              imagesBase64[0]
+            )
+            analysisMethod = 'ai-vision-single-fallback'
+            console.log('✅ Análise com primeira imagem bem sucedida')
+          } catch (singleImageError: any) {
+            console.error(
+              '❌ Falha na análise com primeira imagem:',
+              singleImageError.message
+            )
+            // Usar fallback inteligente baseado no nome do primeiro arquivo
+            try {
+              generatedProduct =
+                await OpenAIService.generateSmartFallbackProduct(
+                  files[0].filename
+                )
+              analysisMethod = 'smart-fallback'
+              console.log('✅ Fallback inteligente bem sucedido')
+            } catch (fallbackError: any) {
+              console.error('❌ Falha no fallback:', fallbackError.message)
+              throw new AppError(
+                'Limite de requisições excedido. Tente novamente em alguns minutos.',
+                429
+              )
+            }
+          }
+        } else {
+          // Para outros erros, tentar com primeira imagem
+          console.log('🔄 Tentando análise com primeira imagem...')
+          try {
+            generatedProduct = await OpenAIService.analyzeProductImage(
+              imagesBase64[0]
+            )
+            analysisMethod = 'ai-vision-single-fallback'
+            console.log('✅ Análise com primeira imagem bem sucedida')
+          } catch (fallbackError: any) {
+            console.error('❌ Falha na análise:', fallbackError.message)
+            throw new AppError(`Falha na análise: ${aiError.message}`, 500)
+          }
+        }
+      }
+
+      console.log('📝 Produto gerado:', generatedProduct)
+
+      // Mapear classificação e categoria para IDs únicos
+      const idcl = Math.abs(
+        generatedProduct.classification
+          .split('')
+          .reduce((a, b) => a + b.charCodeAt(0), 0) % 1000
       )
+      const idca = Math.abs(
+        generatedProduct.category
+          .split('')
+          .reduce((a, b) => a + b.charCodeAt(0), 0) % 1000
+      )
+
+      console.log(`🔢 IDs gerados - idcl: ${idcl}, idca: ${idca}`)
+
+      // Usar a primeira imagem comprimida para salvar no banco
+      console.log('🗜️ Comprimindo primeira imagem para salvar no banco...')
+      const compressedBase64 = this.compressBase64Image(imagesBase64[0])
+      const compressedSizeKB = Math.round(
+        (compressedBase64.length * 3) / 4 / 1024
+      )
+      console.log(`📊 Tamanho comprimido: ${compressedSizeKB} KB`)
+
+      // Criar payload para o banco de dados
+      const productData = {
+        title: generatedProduct.title,
+        productType: generatedProduct.productType,
+        idcl,
+        idca,
+        idPartner: 1, // Parceiro padrão
+        idPrinter: null,
+        measure: 'un', // Unidade padrão
+        quantity: null,
+        price: generatedProduct.price,
+        offer: generatedProduct.offer,
+        description: generatedProduct.description,
+        remove: null,
+        include: null,
+        datasheet: null,
+        status: 'pending',
+        image: `data:${files[0].mimetype};base64,${compressedBase64}`, // Salvar primeira imagem comprimida
+      }
+
+      console.log('🔍 Validando dados do produto...')
+
+      // Validar dados
+      const validatedData = createProductSchema.parse(productData)
+
+      console.log('💾 Salvando produto no banco de dados...')
+
+      // Criar produto no banco
+      const prisma = await getPrisma()
+      const product = await prisma.product.create({
+        data: validatedData,
+      })
+
+      console.log(`✅ Produto criado com sucesso - ID: ${product.idsku}`)
+
+      // Retornar produto criado com informações adicionais
+      const response = {
+        ...product,
+        aiGenerated: true,
+        aiAnalyzed: analysisMethod.includes('ai-vision'),
+        analysisMethod,
+        originalClassification: generatedProduct.classification,
+        originalCategory: generatedProduct.category,
+        rateLimitHit: !analysisMethod.includes('ai-vision'),
+        imageSizeKB: compressedSizeKB,
+        totalImagesProcessed: files.length,
+        imagesUsedForAnalysis:
+          analysisMethod === 'ai-vision-multiple' ? files.length : 1,
+      }
+
+      return reply.status(201).send(response)
+    } catch (error: any) {
+      console.error('❌ Erro no processamento de múltiplas imagens:', error)
+      throw error
     }
   }
 

@@ -172,35 +172,24 @@ RETORNE APENAS UM JSON válido no formato:
         )
       }
 
-      console.log('✅ Produto analisado com sucesso:', productData)
       return productData
     } catch (error: any) {
-      console.error('❌ Erro detalhado na análise:', error)
+      console.error('❌ Erro na análise com OpenAI:', error)
 
-      // Tratamento específico de erros da OpenAI
-      if (error.status) {
-        console.error(`❌ Erro HTTP ${error.status}:`, error.message)
-        switch (error.status) {
-          case 401:
-            throw new Error(
-              'Chave da OpenAI inválida. Verifique sua configuração.'
-            )
-          case 404:
-            throw new Error(
-              'Modelo não encontrado. Verifique se sua conta tem acesso.'
-            )
-          case 429:
-            console.warn(
-              '⚠️ Rate limit atingido, será usado fallback automaticamente'
-            )
-            throw new Error('RATE_LIMIT') // Erro especial para trigger do fallback
-          case 500:
-            throw new Error('Erro interno da OpenAI. Tente novamente.')
-          default:
-            throw new Error(
-              `Erro da OpenAI (${error.status}): ${error.message}`
-            )
-        }
+      // Tratar erros específicos da OpenAI
+      if (error.status === 429) {
+        console.error('⚠️ Rate limit atingido')
+        throw new Error('RATE_LIMIT')
+      }
+
+      if (error.status === 400) {
+        console.error('❌ Erro 400 - Bad Request')
+        throw new Error('Imagem inválida ou muito grande para a OpenAI')
+      }
+
+      if (error.status === 401) {
+        console.error('❌ Erro 401 - Unauthorized')
+        throw new Error('Chave da OpenAI inválida')
       }
 
       // Verificar se é erro de rede
@@ -212,6 +201,223 @@ RETORNE APENAS UM JSON válido no formato:
       if (error.message.includes('JSON')) {
         throw new Error(
           'Falha ao processar resposta da IA. Tente com uma imagem diferente.'
+        )
+      }
+
+      // Re-throw com mensagem mais amigável
+      throw new Error(`Falha na análise: ${error.message}`)
+    }
+  }
+
+  // Novo método para analisar múltiplas imagens
+  static async analyzeMultipleProductImages(
+    imagesBase64: string[]
+  ): Promise<GeneratedProduct> {
+    console.log(
+      `🤖 Iniciando análise de ${imagesBase64.length} imagens com OpenAI Vision...`
+    )
+
+    // Verificar se a chave da API está configurada
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('❌ OPENAI_API_KEY não configurada')
+      throw new Error(
+        'Chave da OpenAI não configurada. Verifique as variáveis de ambiente'
+      )
+    }
+
+    if (!openai) {
+      console.error('❌ Cliente OpenAI não inicializado')
+      throw new Error('Cliente OpenAI não disponível')
+    }
+
+    if (process.env.OPENAI_API_KEY === 'sua-chave-da-openai-aqui') {
+      console.error('❌ OPENAI_API_KEY ainda está com valor padrão')
+      throw new Error('Configure uma chave válida da OpenAI no arquivo .env')
+    }
+
+    // Verificar limite de imagens
+    if (imagesBase64.length > 5) {
+      throw new Error('Máximo de 5 imagens permitidas')
+    }
+
+    if (imagesBase64.length === 0) {
+      throw new Error('Pelo menos uma imagem é necessária')
+    }
+
+    // Log do tamanho das imagens
+    const totalSizeKB = imagesBase64.reduce((total, base64) => {
+      return total + Math.round((base64.length * 3) / 4 / 1024)
+    }, 0)
+    console.log(`📷 Tamanho total das imagens: ${totalSizeKB} KB`)
+
+    if (totalSizeKB > 15000) {
+      console.warn('⚠️ Imagens muito grandes, pode causar problemas')
+    }
+
+    const prompt = `
+Analise estas ${imagesBase64.length} imagens do MESMO produto e extraia as seguintes informações EXATAMENTE conforme as regras:
+
+IMPORTANTE: As imagens mostram diferentes ângulos/perspectivas do MESMO produto. Use todas as imagens para criar uma análise mais completa e precisa.
+
+TIPOS PERMITIDOS:
+- souvenir (para souvenirs, lembranças, artesanato)
+- menu (para comidas, bebidas, pratos)
+- vestuario (para roupas, acessórios vestíveis)
+
+CLASSIFICAÇÕES POR TIPO:
+- souvenir: artesanato, colecionavel, local
+- menu: entrada, prato_principal, bebida
+- vestuario: camiseta, bone, moletom
+
+CATEGORIAS:
+- artesanato: madeira, ceramica, tecido
+- colecionavel: moeda, selo, figurinha
+- local: lembranca, cartao_postal, imas
+- entrada: salada, sopa, petisco
+- prato_principal: carne, peixe, vegetariano
+- bebida: suco, refrigerante, alcoolica
+- camiseta: manga_curta, manga_longa, regata
+- bone: aba_reta, aba_curva, trucker
+- moletom: com_capuz, sem_capuz, ziper
+
+INSTRUÇÕES:
+1. Analise TODAS as imagens para identificar o produto
+2. Use informações de todas as imagens para criar uma descrição mais completa
+3. Classifique o produto no tipo mais adequado (souvenir, menu ou vestuario)
+4. Escolha a classificação e categoria corretas
+5. Crie um título descritivo baseado no que você vê em todas as imagens
+6. Escreva uma descrição detalhada considerando todos os ângulos/detalhes visíveis
+7. Estime um preço justo entre R$ 10 e R$ 300
+8. Defina uma oferta menor que o preço
+
+RETORNE APENAS UM JSON válido no formato:
+{
+  "title": "Nome descritivo baseado em todas as imagens",
+  "productType": "tipo_identificado",
+  "classification": "classificacao_adequada", 
+  "category": "categoria_adequada",
+  "description": "Descrição detalhada considerando todas as imagens",
+  "price": numero_preco_estimado,
+  "offer": numero_oferta_menor
+}
+`
+
+    try {
+      console.log('📤 Enviando requisição para OpenAI com múltiplas imagens...')
+
+      // Construir conteúdo da mensagem com texto e imagens
+      const content: any[] = [
+        {
+          type: 'text',
+          text: prompt,
+        },
+      ]
+
+      // Adicionar cada imagem ao conteúdo
+      imagesBase64.forEach((base64, index) => {
+        content.push({
+          type: 'image_url',
+          image_url: {
+            url: `data:image/jpeg;base64,${base64}`,
+            detail: 'low', // Usar resolução baixa para economizar tokens
+          },
+        })
+        console.log(`📷 Imagem ${index + 1} adicionada ao prompt`)
+      })
+
+      const completion = await openai!.chat.completions.create({
+        model: 'gpt-4o-mini', // Usar modelo mais barato e com limites maiores
+        messages: [
+          {
+            role: 'user',
+            content,
+          },
+        ],
+        max_tokens: 500, // Aumentar um pouco para análise mais complexa
+        temperature: 0.3,
+      })
+
+      console.log('📥 Resposta recebida da OpenAI')
+      console.log('🔍 Usage:', completion.usage)
+
+      const responseContent = completion.choices[0]?.message?.content
+      if (!responseContent) {
+        console.error('❌ Nenhum conteúdo retornado da OpenAI')
+        throw new Error('Nenhum conteúdo retornado da OpenAI')
+      }
+
+      console.log('📝 Conteúdo da resposta:', responseContent)
+
+      // Tentar extrair JSON da resposta
+      const jsonMatch = responseContent.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        console.error(
+          '❌ Não foi possível extrair JSON da resposta:',
+          responseContent
+        )
+        throw new Error('Resposta da OpenAI não contém JSON válido')
+      }
+
+      console.log('🔍 JSON extraído:', jsonMatch[0])
+
+      let productData: GeneratedProduct
+      try {
+        productData = JSON.parse(jsonMatch[0]) as GeneratedProduct
+      } catch (parseError) {
+        console.error('❌ Erro ao fazer parse do JSON:', parseError)
+        console.error('JSON problemático:', jsonMatch[0])
+        throw new Error('JSON retornado pela OpenAI é inválido')
+      }
+
+      // Validar se os campos obrigatórios estão presentes
+      const missingFields = []
+      if (!productData.title) missingFields.push('title')
+      if (!productData.productType) missingFields.push('productType')
+      if (!productData.classification) missingFields.push('classification')
+      if (!productData.category) missingFields.push('category')
+      if (!productData.description) missingFields.push('description')
+      if (!productData.price) missingFields.push('price')
+      if (!productData.offer) missingFields.push('offer')
+
+      if (missingFields.length > 0) {
+        console.error('❌ Campos obrigatórios ausentes:', missingFields)
+        console.error('Dados recebidos:', productData)
+        throw new Error(
+          `Dados incompletos da OpenAI. Campos ausentes: ${missingFields.join(
+            ', '
+          )}`
+        )
+      }
+
+      return productData
+    } catch (error: any) {
+      console.error('❌ Erro na análise com OpenAI:', error)
+
+      // Tratar erros específicos da OpenAI
+      if (error.status === 429) {
+        console.error('⚠️ Rate limit atingido')
+        throw new Error('RATE_LIMIT')
+      }
+
+      if (error.status === 400) {
+        console.error('❌ Erro 400 - Bad Request')
+        throw new Error('Imagens inválidas ou muito grandes para a OpenAI')
+      }
+
+      if (error.status === 401) {
+        console.error('❌ Erro 401 - Unauthorized')
+        throw new Error('Chave da OpenAI inválida')
+      }
+
+      // Verificar se é erro de rede
+      if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+        throw new Error('Erro de conexão com a OpenAI. Verifique sua internet.')
+      }
+
+      // Se não tem status, é um erro interno
+      if (error.message.includes('JSON')) {
+        throw new Error(
+          'Falha ao processar resposta da IA. Tente com imagens diferentes.'
         )
       }
 

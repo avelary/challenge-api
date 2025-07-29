@@ -13,10 +13,16 @@ export async function productsRoutes(fastify: FastifyInstance) {
   // POST /products - Criar produto
   fastify.post('/', productsController.create.bind(productsController))
 
-  // POST /products/generate-ai - Gerar produto com IA
+  // POST /products/generate-ai - Gerar produto com IA (uma imagem)
   fastify.post(
     '/generate-ai',
     productsController.generateWithAI.bind(productsController)
+  )
+
+  // POST /products/generate-ai-multiple - Gerar produto com IA (múltiplas imagens)
+  fastify.post(
+    '/generate-ai-multiple',
+    productsController.generateWithMultipleAI.bind(productsController)
   )
 
   // GET /products - Listar produtos

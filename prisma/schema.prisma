@@ -30,7 +30,7 @@ model Product {
   quantity   Decimal? @db.Decimal(9,3)
   price      Decimal  @default(0) @db.Decimal(9,2)
   offer      Decimal  @default(0) @db.Decimal(9,2)
-  description String? @db.VarChar(255)
+  description String? @db.Text
   remove     String?  @db.Text
   include    String?  @db.Text
   datasheet  String?  @db.Text
