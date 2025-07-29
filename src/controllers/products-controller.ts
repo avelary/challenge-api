@@ -277,12 +277,38 @@ class ProductsController {
       const files: MultipartFile[] = []
 
       // Processar múltiplos arquivos
+      console.log('🔄 STEP 2.1: Iniciando loop de arquivos...')
+      let fileCount = 0
+
       for await (const part of request.parts()) {
+        console.log(
+          `🔄 STEP 2.1.${fileCount + 1}: Processando part - type: ${
+            part.type
+          }, fieldname: ${part.fieldname}`
+        )
+
         if (part.type === 'file' && part.fieldname === 'images') {
-          console.log(`📁 STEP 2.1: Arquivo encontrado - ${part.filename}`)
+          fileCount++
+          console.log(
+            `📁 STEP 2.1.${fileCount}: Arquivo encontrado - ${part.filename} (${part.mimetype})`
+          )
+
+          // Adicionar timeout para evitar travamento
+          const fileProcessStart = Date.now()
           files.push(part)
+          console.log(
+            `✅ STEP 2.1.${fileCount}: Arquivo ${part.filename} adicionado em ${
+              Date.now() - fileProcessStart
+            }ms`
+          )
+        } else {
+          console.log(
+            `⏭️ STEP 2.1: Ignorando part - type: ${part.type}, fieldname: ${part.fieldname}`
+          )
         }
       }
+
+      console.log(`✅ STEP 2.1 FINAL: ${fileCount} arquivos coletados`)
 
       console.log(
         `⏱️ STEP 2 COMPLETO: Coleta levou ${Date.now() - collectStartTime}ms`
@@ -320,8 +346,35 @@ class ProductsController {
           throw new AppError(`Arquivo ${i + 1} deve ser uma imagem`, 400)
         }
 
-        // Verificar tamanho do arquivo
-        const buffer = await file.toBuffer()
+        // Verificar tamanho do arquivo com timeout
+        console.log(
+          `🔄 STEP 3.${i + 1}.1: Convertendo ${
+            file.filename
+          } para buffer (toBuffer)...`
+        )
+        const bufferStartTime = Date.now()
+
+        const bufferPromise = file.toBuffer()
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(
+            () =>
+              reject(
+                new Error(`TIMEOUT: ${file.filename} demorou mais de 15s`)
+              ),
+            15000
+          )
+        })
+
+        const buffer = (await Promise.race([
+          bufferPromise,
+          timeoutPromise,
+        ])) as Buffer
+        console.log(
+          `✅ STEP 3.${i + 1}.1: Buffer criado em ${
+            Date.now() - bufferStartTime
+          }ms`
+        )
+
         const fileSizeMB = buffer.length / 1024 / 1024
         totalSizeMB += fileSizeMB
 
