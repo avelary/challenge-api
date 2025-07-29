@@ -264,19 +264,29 @@ class ProductsController {
 
   // Novo método para processar múltiplas imagens
   async generateWithMultipleAI(request: FastifyRequest, reply: FastifyReply) {
-    console.log('🚀 Iniciando processamento de múltiplas imagens com IA...')
+    console.log(
+      '🚀 STEP 1: Iniciando processamento de múltiplas imagens com IA...'
+    )
     const startTime = Date.now()
 
     try {
+      console.log('🚀 STEP 2: Coletando arquivos do upload...')
+      const collectStartTime = Date.now()
+
       // Coletar todas as imagens do upload
       const files: MultipartFile[] = []
 
       // Processar múltiplos arquivos
       for await (const part of request.parts()) {
         if (part.type === 'file' && part.fieldname === 'images') {
+          console.log(`📁 STEP 2.1: Arquivo encontrado - ${part.filename}`)
           files.push(part)
         }
       }
+
+      console.log(
+        `⏱️ STEP 2 COMPLETO: Coleta levou ${Date.now() - collectStartTime}ms`
+      )
 
       if (files.length === 0) {
         console.error('❌ Nenhum arquivo enviado')
@@ -290,8 +300,10 @@ class ProductsController {
         throw new AppError('Máximo de 3 imagens permitidas', 400)
       }
 
-      console.log(`📁 ${files.length} arquivos recebidos`)
-      console.log(`⏱️ Tempo para coletar arquivos: ${Date.now() - startTime}ms`)
+      console.log(
+        `🚀 STEP 3: ${files.length} arquivos recebidos, processando para base64...`
+      )
+      const processStartTime = Date.now()
 
       // Verificar se todos são imagens e processar
       const imagesBase64: string[] = []
@@ -332,21 +344,28 @@ class ProductsController {
         )
 
         // Converter imagem para base64
+        console.log(
+          `🔄 STEP 3.${i + 1}: Convertendo ${file.filename} para base64...`
+        )
+        const convertStartTime = Date.now()
+
         const imageBase64 = buffer.toString('base64')
         imagesBase64.push(imageBase64)
         mimeTypes.push(file.mimetype)
 
         console.log(
-          `📊 Imagem ${i + 1} - Base64: ${Math.round(
+          `✅ STEP 3.${i + 1} COMPLETO: ${file.filename} - ${Math.round(
             (imageBase64.length * 3) / 4 / 1024
-          )} KB`
+          )} KB em ${Date.now() - convertStartTime}ms`
         )
       }
 
-      console.log(`📊 Tamanho total: ${totalSizeMB.toFixed(2)} MB`)
       console.log(
-        `⏱️ Tempo para processar todas as imagens: ${Date.now() - startTime}ms`
+        `⏱️ STEP 3 COMPLETO: Processamento base64 levou ${
+          Date.now() - processStartTime
+        }ms`
       )
+      console.log(`📊 Tamanho total: ${totalSizeMB.toFixed(2)} MB`)
 
       let generatedProduct
       let analysisMethod = 'ai-vision-multiple'
@@ -354,15 +373,21 @@ class ProductsController {
       try {
         // Tentar análise com múltiplas imagens
         console.log(
-          '🔍 Tentando análise com OpenAI Vision (múltiplas imagens)...'
+          '🚀 STEP 4: Enviando para OpenAI Vision (múltiplas imagens)...'
         )
         const openaiStartTime = Date.now()
+
         generatedProduct = await OpenAIService.analyzeMultipleProductImages(
           imagesBase64,
           mimeTypes
         )
-        console.log('✅ Análise com IA Vision (múltiplas imagens) bem sucedida')
-        console.log(`⏱️ Tempo OpenAI: ${Date.now() - openaiStartTime}ms`)
+
+        console.log(
+          `✅ STEP 4 COMPLETO: OpenAI respondeu em ${
+            Date.now() - openaiStartTime
+          }ms`
+        )
+        console.log('🎯 Análise com IA Vision (múltiplas imagens) bem sucedida')
       } catch (aiError: any) {
         console.error('❌ Falha na análise com IA Vision:', aiError.message)
         console.error(
@@ -472,12 +497,20 @@ class ProductsController {
         image: `data:${files[0].mimetype};base64,${compressedBase64}`, // Salvar primeira imagem comprimida
       }
 
-      console.log('🔍 Validando dados do produto...')
+      console.log('🚀 STEP 5: Validando dados do produto...')
+      const validateStartTime = Date.now()
 
       // Validar dados
       const validatedData = createProductSchema.parse(productData)
 
-      console.log('💾 Salvando produto no banco de dados...')
+      console.log(
+        `⏱️ STEP 5 COMPLETO: Validação levou ${
+          Date.now() - validateStartTime
+        }ms`
+      )
+
+      console.log('🚀 STEP 6: Salvando produto no banco de dados...')
+      const saveStartTime = Date.now()
 
       // Criar produto no banco
       const prisma = await getPrisma()
@@ -485,7 +518,11 @@ class ProductsController {
         data: validatedData,
       })
 
+      console.log(
+        `⏱️ STEP 6 COMPLETO: Salvamento levou ${Date.now() - saveStartTime}ms`
+      )
       console.log(`✅ Produto criado com sucesso - ID: ${product.idsku}`)
+      console.log(`🏁 PROCESSO TOTAL: ${Date.now() - startTime}ms`)
 
       // Retornar produto criado com informações adicionais
       const response = {
