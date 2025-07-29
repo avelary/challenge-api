@@ -33,6 +33,15 @@ export class OpenAIService {
       )
     }
 
+    // Log da chave (primeiros e últimos caracteres para debug)
+    const keyPreview =
+      process.env.OPENAI_API_KEY.substring(0, 10) +
+      '...' +
+      process.env.OPENAI_API_KEY.substring(
+        process.env.OPENAI_API_KEY.length - 4
+      )
+    console.log(`🔑 Chave OpenAI configurada: ${keyPreview}`)
+
     if (!openai) {
       console.error('❌ Cliente OpenAI não inicializado')
       throw new Error('Cliente OpenAI não disponível')
@@ -100,7 +109,7 @@ RETORNE APENAS UM JSON válido no formato:
       console.log('📤 Enviando requisição para OpenAI...')
 
       const completion = await openai!.chat.completions.create({
-        model: 'gpt-4o-mini', // Usar modelo mais barato e com limites maiores
+        model: 'gpt-4o-mini', // Modelo mais econômico e confiável
         messages: [
           {
             role: 'user',
@@ -113,14 +122,16 @@ RETORNE APENAS UM JSON válido no formato:
                 type: 'image_url',
                 image_url: {
                   url: `data:image/jpeg;base64,${imageBase64}`,
-                  detail: 'low', // Usar resolução baixa para economizar tokens e evitar rate limit
+                  detail: 'low', // Usar resolução baixa para economizar tokens
                 },
               },
             ],
           },
         ],
-        max_tokens: 300, // Reduzir tokens para evitar rate limit
-        temperature: 0.3,
+        max_tokens: 200, // Reduzir ainda mais para evitar custos
+        temperature: 0.1, // Mais determinístico
+        frequency_penalty: 0,
+        presence_penalty: 0,
       })
 
       console.log('📥 Resposta recebida da OpenAI')
@@ -176,20 +187,43 @@ RETORNE APENAS UM JSON válido no formato:
     } catch (error: any) {
       console.error('❌ Erro na análise com OpenAI:', error)
 
+      // Log detalhado do erro para debug
+      console.error('🔍 Detalhes do erro OpenAI:', {
+        status: error.status,
+        message: error.message,
+        type: error.type,
+        code: error.code,
+      })
+
       // Tratar erros específicos da OpenAI
       if (error.status === 429) {
-        console.error('⚠️ Rate limit atingido')
+        console.error('⚠️ Rate limit atingido - Status 429')
         throw new Error('RATE_LIMIT')
       }
 
       if (error.status === 400) {
-        console.error('❌ Erro 400 - Bad Request')
+        console.error('❌ Erro 400 - Bad Request:', error.message)
         throw new Error('Imagem inválida ou muito grande para a OpenAI')
       }
 
       if (error.status === 401) {
-        console.error('❌ Erro 401 - Unauthorized')
-        throw new Error('Chave da OpenAI inválida')
+        console.error('❌ Erro 401 - Unauthorized:', error.message)
+        throw new Error('Chave da OpenAI inválida ou sem permissões')
+      }
+
+      if (error.status === 402) {
+        console.error('❌ Erro 402 - Payment Required:', error.message)
+        throw new Error('Quota da OpenAI esgotada - verifique billing')
+      }
+
+      if (error.status === 403) {
+        console.error('❌ Erro 403 - Forbidden:', error.message)
+        throw new Error('Acesso negado pela OpenAI - verifique permissões')
+      }
+
+      if (error.status === 500) {
+        console.error('❌ Erro 500 - Internal Server Error:', error.message)
+        throw new Error('Erro interno da OpenAI - tente novamente')
       }
 
       // Verificar se é erro de rede
@@ -224,6 +258,15 @@ RETORNE APENAS UM JSON válido no formato:
         'Chave da OpenAI não configurada. Verifique as variáveis de ambiente'
       )
     }
+
+    // Log da chave (primeiros e últimos caracteres para debug)
+    const keyPreview =
+      process.env.OPENAI_API_KEY.substring(0, 10) +
+      '...' +
+      process.env.OPENAI_API_KEY.substring(
+        process.env.OPENAI_API_KEY.length - 4
+      )
+    console.log(`🔑 Chave OpenAI configurada: ${keyPreview}`)
 
     if (!openai) {
       console.error('❌ Cliente OpenAI não inicializado')
@@ -326,15 +369,17 @@ RETORNE APENAS UM JSON válido no formato:
       })
 
       const completion = await openai!.chat.completions.create({
-        model: 'gpt-4o-mini', // Usar modelo mais barato e com limites maiores
+        model: 'gpt-4o-mini', // Modelo mais econômico e confiável
         messages: [
           {
             role: 'user',
             content,
           },
         ],
-        max_tokens: 500, // Aumentar um pouco para análise mais complexa
-        temperature: 0.3,
+        max_tokens: 250, // Aumentar um pouco para múltiplas imagens mas manter econômico
+        temperature: 0.1, // Mais determinístico
+        frequency_penalty: 0,
+        presence_penalty: 0,
       })
 
       console.log('📥 Resposta recebida da OpenAI')
@@ -393,20 +438,43 @@ RETORNE APENAS UM JSON válido no formato:
     } catch (error: any) {
       console.error('❌ Erro na análise com OpenAI:', error)
 
+      // Log detalhado do erro para debug
+      console.error('🔍 Detalhes do erro OpenAI (múltiplas imagens):', {
+        status: error.status,
+        message: error.message,
+        type: error.type,
+        code: error.code,
+      })
+
       // Tratar erros específicos da OpenAI
       if (error.status === 429) {
-        console.error('⚠️ Rate limit atingido')
+        console.error('⚠️ Rate limit atingido - Status 429')
         throw new Error('RATE_LIMIT')
       }
 
       if (error.status === 400) {
-        console.error('❌ Erro 400 - Bad Request')
+        console.error('❌ Erro 400 - Bad Request:', error.message)
         throw new Error('Imagens inválidas ou muito grandes para a OpenAI')
       }
 
       if (error.status === 401) {
-        console.error('❌ Erro 401 - Unauthorized')
-        throw new Error('Chave da OpenAI inválida')
+        console.error('❌ Erro 401 - Unauthorized:', error.message)
+        throw new Error('Chave da OpenAI inválida ou sem permissões')
+      }
+
+      if (error.status === 402) {
+        console.error('❌ Erro 402 - Payment Required:', error.message)
+        throw new Error('Quota da OpenAI esgotada - verifique billing')
+      }
+
+      if (error.status === 403) {
+        console.error('❌ Erro 403 - Forbidden:', error.message)
+        throw new Error('Acesso negado pela OpenAI - verifique permissões')
+      }
+
+      if (error.status === 500) {
+        console.error('❌ Erro 500 - Internal Server Error:', error.message)
+        throw new Error('Erro interno da OpenAI - tente novamente')
       }
 
       // Verificar se é erro de rede
