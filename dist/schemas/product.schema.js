@@ -28,18 +28,18 @@ exports.createProductSchema = zod_1.z.object({
     price: zod_1.z
         .number()
         .min(0)
-        .or(zod_1.z.string().refine(val => !isNaN(Number(val)), 'Price must be a number'))
-        .transform(val => Number(val)),
+        .or(zod_1.z.string().refine((val) => !isNaN(Number(val)), 'Price must be a number'))
+        .transform((val) => Number(val)),
     offer: zod_1.z
         .number()
         .min(0)
-        .or(zod_1.z.string().refine(val => !isNaN(Number(val)), 'Offer must be a number'))
-        .transform(val => Number(val)),
-    description: zod_1.z.string().max(255).optional().nullable(),
+        .or(zod_1.z.string().refine((val) => !isNaN(Number(val)), 'Offer must be a number'))
+        .transform((val) => Number(val)),
+    description: zod_1.z.string().max(2000).optional().nullable(),
     remove: zod_1.z.string().optional().nullable(),
     include: zod_1.z.string().optional().nullable(),
     datasheet: zod_1.z.string().optional().nullable(),
 });
 exports.deleteProductParamsSchema = zod_1.z.object({
-    idsku: zod_1.z.string().transform(val => Number(val)),
+    idsku: zod_1.z.string().transform((val) => Number(val)),
 });

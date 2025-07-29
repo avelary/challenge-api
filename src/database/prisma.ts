@@ -6,33 +6,17 @@ console.log(
   process.env.DATABASE_URL ? 'Configurada' : 'Não configurada'
 )
 
-// Aguardar um pouco para o Railway configurar as variáveis de ambiente
-const waitForDatabaseUrl = async () => {
-  let attempts = 0
-  const maxAttempts = 10
-
-  while (!process.env.DATABASE_URL && attempts < maxAttempts) {
-    console.log(
-      `⏳ Aguardando DATABASE_URL... Tentativa ${attempts + 1}/${maxAttempts}`
-    )
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    attempts++
-  }
-
-  if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL não foi configurada após 10 tentativas')
-  }
-
-  console.log('✅ DATABASE_URL configurada com sucesso')
-}
-
 // Inicializar Prisma de forma assíncrona
 let prisma: PrismaClient | null = null
 
 const initializePrisma = async () => {
   if (prisma) return prisma
 
-  await waitForDatabaseUrl()
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL não está configurada')
+  }
+
+  console.log('✅ Inicializando Prisma Client')
 
   prisma = new PrismaClient({
     log:

@@ -30,12 +30,30 @@ const app = Fastify({
 // Health check
 app.get('/health', async (request, reply) => {
   console.log('🏥 Health check requested')
-  return {
+
+  const healthResponse = {
     status: 'ok',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
     port: process.env.PORT || '10000',
+    database: 'checking...',
+    openai: process.env.OPENAI_API_KEY ? 'configured' : 'not configured',
   }
+
+  try {
+    // Verificar conexão com banco de dados
+    const { getPrisma } = await import('./database/prisma')
+    const prisma = await getPrisma()
+    await prisma.$queryRaw`SELECT 1`
+    healthResponse.database = 'connected'
+    console.log('✅ Database connection successful')
+  } catch (error) {
+    console.log('❌ Database connection failed:', error)
+    healthResponse.database = 'disconnected'
+    healthResponse.status = 'degraded'
+  }
+
+  return healthResponse
 })
 
 // Root endpoint
