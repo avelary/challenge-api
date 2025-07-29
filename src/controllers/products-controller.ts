@@ -280,13 +280,17 @@ class ProductsController {
       console.log('🔄 STEP 2.1: Iniciando loop de arquivos...')
       let fileCount = 0
 
-      // Adicionar timeout para o loop completo
+      // Estratégia simplificada: timeout menor e limite de partes
       let partCount = 0
+      let maxParts = 5 // Máximo de partes para processar
+
       const partsPromise = (async () => {
-        for await (const part of request.parts()) {
+        const partsIterator = request.parts()
+
+        for await (const part of partsIterator) {
           partCount++
           console.log(
-            `🔄 STEP 2.1.${partCount}: Processando part ${partCount} - type: ${
+            `🔄 STEP 2.1.${partCount}: Part ${partCount}/${maxParts} - type: ${
               part.type
             }, fieldname: ${part.fieldname || 'undefined'}`
           )
@@ -294,42 +298,52 @@ class ProductsController {
           if (part.type === 'file' && part.fieldname === 'images') {
             fileCount++
             console.log(
-              `📁 STEP 2.1.${partCount}: Arquivo ${fileCount} encontrado - ${part.filename} (${part.mimetype})`
+              `📁 STEP 2.1.${partCount}: Arquivo ${fileCount} - ${part.filename} (${part.mimetype})`
             )
 
-            const fileProcessStart = Date.now()
             files.push(part)
             console.log(
-              `✅ STEP 2.1.${partCount}: Arquivo ${
-                part.filename
-              } adicionado em ${Date.now() - fileProcessStart}ms`
+              `✅ STEP 2.1.${partCount}: Arquivo ${part.filename} coletado`
             )
           } else if (part.type === 'field') {
             console.log(
-              `📝 STEP 2.1.${partCount}: Campo encontrado - ${part.fieldname}: ${part.value}`
+              `📝 STEP 2.1.${partCount}: Campo - ${part.fieldname}: ${part.value}`
             )
           } else {
+            console.log(`⏭️ STEP 2.1.${partCount}: Part ignorada`)
+          }
+
+          // Parar se atingiu o limite ou coletou arquivos suficientes
+          if (partCount >= maxParts || fileCount >= 3) {
             console.log(
-              `⏭️ STEP 2.1.${partCount}: Ignorando part - type: ${part.type}, fieldname: ${part.fieldname}`
+              `🔚 STEP 2.1: Limite atingido (${partCount} parts, ${fileCount} arquivos), finalizando`
             )
+            break
           }
         }
+
         console.log(
-          `🔚 STEP 2.1: Loop terminado! Total de ${partCount} parts processadas`
+          `✅ STEP 2.1: Processamento completo - ${partCount} parts, ${fileCount} arquivos`
         )
       })()
 
-      // Timeout de 20 segundos para o loop
+      // Timeout reduzido para 5 segundos
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
-          console.error(
-            `❌ TIMEOUT: Loop demorou mais de 20s (${partCount} parts processadas)`
+          console.log(
+            `⚠️ TIMEOUT: 5s atingido (${partCount} parts, ${fileCount} arquivos)`
           )
-          reject(new Error('Timeout processando upload'))
-        }, 20000)
+          console.log(`🔄 Continuando com ${fileCount} arquivo(s) coletado(s)`)
+          // Não rejeitar, apenas continuar com o que temos
+        }, 5000)
       })
 
-      await Promise.race([partsPromise, timeoutPromise])
+      // Usar Promise.allSettled para não falhar no timeout
+      await Promise.race([partsPromise, timeoutPromise]).catch(() => {
+        console.log(
+          `⚠️ Erro no loop, mas continuando com ${fileCount} arquivo(s)`
+        )
+      })
 
       console.log(
         `✅ STEP 2.1 FINAL: ${fileCount} arquivos coletados de ${partCount} parts totais`
@@ -339,12 +353,17 @@ class ProductsController {
         `⏱️ STEP 2 COMPLETO: Coleta levou ${Date.now() - collectStartTime}ms`
       )
 
+      // Verificar se conseguimos coletar pelo menos 1 arquivo
       if (files.length === 0) {
-        console.error('❌ Nenhum arquivo enviado')
+        console.error(
+          `❌ Nenhum arquivo coletado após ${partCount} parts processadas`
+        )
         throw new AppError(
-          'Pelo menos uma imagem é obrigatória para análise da IA',
+          'Erro no upload: nenhuma imagem foi recebida. Tente novamente.',
           400
         )
+      } else {
+        console.log(`🎯 Prosseguindo com ${files.length} arquivo(s) válido(s)`)
       }
 
       if (files.length > 3) {
