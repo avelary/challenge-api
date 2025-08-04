@@ -25,6 +25,12 @@ export async function productsRoutes(fastify: FastifyInstance) {
     productsController.generateWithMultipleAI.bind(productsController)
   )
 
+  // POST /products/bulk-menu-ocr - NOVA FUNCIONALIDADE: Processar cardápio em massa via OCR
+  fastify.post(
+    '/bulk-menu-ocr',
+    productsController.processBulkMenuOCR.bind(productsController)
+  )
+
   // GET /products - Listar produtos
   fastify.get('/', productsController.index.bind(productsController))
 

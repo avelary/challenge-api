@@ -6,7 +6,7 @@ export const createProductSchema = z.object({
   title: z
     .string()
     .trim()
-    .min(6, 'Title must have at least 6 characters.')
+    .min(2, 'Title must have at least 2 characters.')
     .max(100, 'Title must have at most 100 characters.'),
 
   productType: z

@@ -7,6 +7,7 @@ import {
 } from '../schemas/product.schema'
 import { OpenAIService } from '../services/openai.service'
 import { MultipartFile } from '@fastify/multipart'
+import { ImageUtils } from '../utils/image-utils'
 
 class ProductsController {
   async create(request: FastifyRequest, reply: FastifyReply) {
@@ -55,20 +56,57 @@ class ProductsController {
     }
   }
 
-  // Função para comprimir imagem base64 (reduzir qualidade)
-  private compressBase64Image(base64: string, maxSizeKB: number = 500): string {
-    // Se a imagem já é pequena, retornar como está
+  // Função para comprimir imagem usando Sharp (substituindo a versão antiga)
+  private async compressImageBuffer(
+    buffer: Buffer,
+    mimeType: string,
+    maxSizeKB: number = 500
+  ): Promise<{ base64: string; mimeType: string; sizeKB: number }> {
+    console.log(
+      '🗜️ [PERFORMANCE] Iniciando compressão inteligente da imagem...'
+    )
+    const startTime = Date.now()
+
+    try {
+      const result = await ImageUtils.bufferToCompressedBase64(
+        buffer,
+        mimeType,
+        maxSizeKB
+      )
+
+      const compressionTime = Date.now() - startTime
+      console.log(
+        `⏱️ [PERFORMANCE] Compressão concluída em ${compressionTime}ms`
+      )
+
+      return result
+    } catch (error) {
+      console.error('❌ Erro na compressão, usando fallback:', error)
+
+      // Fallback: usar método antigo se Sharp falhar
+      const base64 = buffer.toString('base64')
+      return {
+        base64: this.legacyCompressBase64(base64, maxSizeKB),
+        mimeType,
+        sizeKB: Math.round((base64.length * 3) / 4 / 1024),
+      }
+    }
+  }
+
+  // Fallback para compressão simples (método antigo)
+  private legacyCompressBase64(
+    base64: string,
+    maxSizeKB: number = 500
+  ): string {
     const currentSizeKB = Math.round((base64.length * 3) / 4 / 1024)
     if (currentSizeKB <= maxSizeKB) {
       return base64
     }
 
-    // Para imagens muito grandes, truncar (não é ideal, mas evita erro de DB)
-    // Em uma implementação real, usaria uma biblioteca de compressão de imagem
-    const maxLength = (maxSizeKB * 1024 * 4) / 3 // Converter KB para caracteres base64
+    const maxLength = (maxSizeKB * 1024 * 4) / 3
     if (base64.length > maxLength) {
       console.warn(
-        `⚠️ Imagem muito grande (${currentSizeKB}KB), truncando para ${maxSizeKB}KB`
+        `⚠️ Fallback: truncando de ${currentSizeKB}KB para ${maxSizeKB}KB`
       )
       return base64.substring(0, Math.floor(maxLength))
     }
@@ -106,15 +144,22 @@ class ProductsController {
 
       console.log(`📊 Tamanho do arquivo: ${fileSizeMB.toFixed(2)} MB`)
 
-      // Converter imagem para base64
-      console.log('🔄 Convertendo imagem para base64...')
-      const imageBase64 = buffer.toString('base64')
-
+      // Comprimir e converter imagem para base64 (OTIMIZAÇÃO DE PERFORMANCE)
       console.log(
-        `📊 Tamanho base64: ${Math.round(
-          (imageBase64.length * 3) / 4 / 1024
-        )} KB`
+        '🔄 [PERFORMANCE] Iniciando compressão e conversão para base64...'
       )
+      const compressionStartTime = Date.now()
+
+      const compressedResult = await this.compressImageBuffer(
+        buffer,
+        data.mimetype,
+        800
+      )
+      const imageBase64 = compressedResult.base64
+
+      const compressionTime = Date.now() - compressionStartTime
+      console.log(`⏱️ [PERFORMANCE] Conversão completa em ${compressionTime}ms`)
+      console.log(`📊 Tamanho final: ${compressedResult.sizeKB}KB`)
 
       let generatedProduct
       let analysisMethod = 'ai-vision'
@@ -200,13 +245,21 @@ class ProductsController {
 
       console.log(`🔢 IDs gerados - idcl: ${idcl}, idca: ${idca}`)
 
-      // Comprimir imagem para salvar no banco (máximo 1MB)
-      console.log('🗜️ Comprimindo imagem para salvar no banco...')
-      const compressedBase64 = this.compressBase64Image(imageBase64)
-      const compressedSizeKB = Math.round(
-        (compressedBase64.length * 3) / 4 / 1024
+      // Comprimir imagem adicional para salvar no banco (máximo 500KB para DB)
+      console.log('🗜️ [PERFORMANCE] Comprimindo para banco de dados...')
+      const dbCompressionStartTime = Date.now()
+
+      const dbCompressedResult = await this.compressImageBuffer(
+        buffer,
+        data.mimetype,
+        500
       )
-      console.log(`📊 Tamanho comprimido: ${compressedSizeKB} KB`)
+      const compressedBase64 = dbCompressedResult.base64
+      const finalMimeType = dbCompressedResult.mimeType
+
+      const dbCompressionTime = Date.now() - dbCompressionStartTime
+      console.log(`⏱️ [PERFORMANCE] Compressão DB em ${dbCompressionTime}ms`)
+      console.log(`📊 Tamanho final DB: ${dbCompressedResult.sizeKB}KB`)
 
       // Criar payload para o banco de dados
       const productData = {
@@ -225,7 +278,7 @@ class ProductsController {
         include: null,
         datasheet: null,
         status: 'pending',
-        image: `data:${data.mimetype};base64,${compressedBase64}`, // Salvar imagem comprimida
+        image: `data:${finalMimeType};base64,${compressedBase64}`, // Salvar imagem comprimida
       }
 
       console.log('🔍 Validando dados do produto...')
@@ -252,7 +305,7 @@ class ProductsController {
         originalClassification: generatedProduct.classification,
         originalCategory: generatedProduct.category,
         rateLimitHit: analysisMethod !== 'ai-vision', // Indicar se houve rate limit
-        imageSizeKB: compressedSizeKB, // Para debug
+        imageSizeKB: dbCompressedResult.sizeKB, // Para debug
       }
 
       return reply.status(201).send(response)
@@ -378,6 +431,7 @@ class ProductsController {
       // Verificar se todos são imagens e processar
       const imagesBase64: string[] = []
       const mimeTypes: string[] = []
+      const buffers: Buffer[] = []
       let totalSizeMB = 0
 
       for (let i = 0; i < files.length; i++) {
@@ -449,6 +503,7 @@ class ProductsController {
         const imageBase64 = buffer.toString('base64')
         imagesBase64.push(imageBase64)
         mimeTypes.push(file.mimetype)
+        buffers.push(buffer)
 
         console.log(
           `✅ STEP 3.${i + 1} COMPLETO: ${file.filename} - ${Math.round(
@@ -568,10 +623,13 @@ class ProductsController {
 
       // Usar a primeira imagem comprimida para salvar no banco
       console.log('🗜️ Comprimindo primeira imagem para salvar no banco...')
-      const compressedBase64 = this.compressBase64Image(imagesBase64[0])
-      const compressedSizeKB = Math.round(
-        (compressedBase64.length * 3) / 4 / 1024
+      const dbCompressedResult = await this.compressImageBuffer(
+        buffers[0],
+        files[0].mimetype,
+        500
       )
+      const compressedBase64 = dbCompressedResult.base64
+      const compressedSizeKB = dbCompressedResult.sizeKB
       console.log(`📊 Tamanho comprimido: ${compressedSizeKB} KB`)
 
       // Criar payload para o banco de dados
@@ -639,6 +697,199 @@ class ProductsController {
       return reply.status(201).send(response)
     } catch (error: any) {
       console.error('❌ Erro no processamento de múltiplas imagens:', error)
+      throw error
+    }
+  }
+
+  /**
+   * NOVA FUNCIONALIDADE: Processar cardápio em massa via OCR
+   * Extrai múltiplos produtos de uma imagem de cardápio e cadastra todos automaticamente
+   */
+  async processBulkMenuOCR(request: FastifyRequest, reply: FastifyReply) {
+    console.log('🍽️ [BULK OCR] Iniciando processamento de cardápio em massa...')
+    const totalStartTime = Date.now()
+
+    try {
+      // STEP 1: Receber e validar arquivo
+      console.log('📤 [STEP 1] Recebendo arquivo de cardápio...')
+      const stepStartTime = Date.now()
+
+      const data: MultipartFile | undefined = await request.file()
+      if (!data) {
+        throw new AppError('Imagem de cardápio é obrigatória', 400)
+      }
+
+      console.log(`📁 Arquivo: ${data.filename} (${data.mimetype})`)
+
+      if (!data.mimetype.startsWith('image/')) {
+        throw new AppError('Arquivo deve ser uma imagem', 400)
+      }
+
+      const buffer = await data.toBuffer()
+      const fileSizeMB = buffer.length / 1024 / 1024
+
+      if (fileSizeMB > 15) {
+        throw new AppError(
+          'Imagem muito grande. Máximo 15MB para cardápios.',
+          400
+        )
+      }
+
+      console.log(`⏱️ [STEP 1] Completo em ${Date.now() - stepStartTime}ms`)
+      console.log(`📊 Tamanho: ${fileSizeMB.toFixed(2)}MB`)
+
+      // STEP 2: Otimizar imagem para OCR (alta qualidade mas tamanho controlado)
+      console.log('🔄 [STEP 2] Otimizando imagem para OCR...')
+      const ocrOptimizationStartTime = Date.now()
+
+      const ocrOptimizedResult = await this.compressImageBuffer(
+        buffer,
+        data.mimetype,
+        2000
+      ) // 2MB para OCR
+      const imageBase64 = ocrOptimizedResult.base64
+
+      console.log(
+        `⏱️ [STEP 2] Otimização OCR em ${
+          Date.now() - ocrOptimizationStartTime
+        }ms`
+      )
+      console.log(`📊 Imagem otimizada: ${ocrOptimizedResult.sizeKB}KB`)
+
+      // STEP 3: Processar OCR do cardápio
+      console.log('🔍 [STEP 3] Processando OCR do cardápio...')
+      const ocrStartTime = Date.now()
+
+      const ocrResult = await OpenAIService.processMenuOCR(
+        imageBase64,
+        ocrOptimizedResult.mimeType
+      )
+
+      console.log(`⏱️ [STEP 3] OCR completo em ${Date.now() - ocrStartTime}ms`)
+      console.log(`🎯 Produtos encontrados: ${ocrResult.products.length}`)
+      console.log(`📝 Método usado: ${ocrResult.method}`)
+      console.log(`💯 Confiança: ${(ocrResult.confidence || 0) * 100}%`)
+
+      if (ocrResult.products.length === 0) {
+        throw new AppError(
+          'Nenhum produto foi identificado no cardápio. Tente uma imagem mais clara.',
+          400
+        )
+      }
+
+      // STEP 4: Cadastrar produtos em massa no banco
+      console.log('💾 [STEP 4] Salvando produtos no banco de dados...')
+      const bulkSaveStartTime = Date.now()
+
+      const prisma = await getPrisma()
+      const createdProducts = []
+
+      // Comprimir imagem uma vez para usar em todos os produtos
+      const dbCompressedResult = await this.compressImageBuffer(
+        buffer,
+        data.mimetype,
+        300
+      ) // Menor para DB
+
+      for (let i = 0; i < ocrResult.products.length; i++) {
+        const product = ocrResult.products[i]
+        console.log(
+          `💾 Salvando produto ${i + 1}/${ocrResult.products.length}: ${
+            product.title
+          }`
+        )
+
+        // Mapear classificação e categoria para IDs únicos
+        const idcl = Math.abs(
+          product.classification
+            .split('')
+            .reduce((a, b) => a + b.charCodeAt(0), 0) % 1000
+        )
+        const idca = Math.abs(
+          product.category.split('').reduce((a, b) => a + b.charCodeAt(0), 0) %
+            1000
+        )
+
+        const productData = {
+          title: product.title,
+          productType: product.productType,
+          idcl,
+          idca,
+          idPartner: 1,
+          idPrinter: null,
+          measure: 'un',
+          quantity: null,
+          price: product.price,
+          offer: product.offer,
+          description: product.description,
+          remove: null,
+          include: null,
+          datasheet: null,
+          status: 'pending',
+          image: `data:${dbCompressedResult.mimeType};base64,${dbCompressedResult.base64}`,
+        }
+
+        try {
+          const validatedData = createProductSchema.parse(productData)
+          const createdProduct = await prisma.product.create({
+            data: validatedData,
+          })
+          createdProducts.push(createdProduct)
+          console.log(`✅ Produto ${i + 1} salvo - ID: ${createdProduct.idsku}`)
+        } catch (productError: any) {
+          console.error(
+            `❌ Erro ao salvar produto ${i + 1}:`,
+            productError.message
+          )
+          // Continuar com próximo produto em caso de erro
+        }
+      }
+
+      const bulkSaveTime = Date.now() - bulkSaveStartTime
+      const totalTime = Date.now() - totalStartTime
+
+      console.log(`⏱️ [STEP 4] Salvamento em massa em ${bulkSaveTime}ms`)
+      console.log(`🏁 [BULK OCR] PROCESSO COMPLETO em ${totalTime}ms`)
+      console.log(
+        `📊 RESUMO: ${createdProducts.length}/${ocrResult.products.length} produtos salvos`
+      )
+
+      // STEP 5: Retornar resultado
+      const response = {
+        success: true,
+        message: `${createdProducts.length} produtos cadastrados com sucesso`,
+        summary: {
+          totalProductsFound: ocrResult.products.length,
+          totalProductsSaved: createdProducts.length,
+          ocrMethod: ocrResult.method,
+          ocrConfidence: ocrResult.confidence,
+          processingTimeMs: totalTime,
+          extractedText: ocrResult.extractedText?.substring(0, 500) || null,
+        },
+        products: createdProducts.map((product) => ({
+          idsku: product.idsku,
+          title: product.title,
+          price: product.price,
+          offer: product.offer,
+          description: product.description,
+        })),
+        performance: {
+          imageOptimizationMs: ocrOptimizationStartTime,
+          ocrProcessingMs: ocrResult.processingTimeMs,
+          bulkSaveMs: bulkSaveTime,
+          totalMs: totalTime,
+        },
+        debug: {
+          originalImageSizeMB: fileSizeMB,
+          optimizedImageSizeKB: ocrOptimizedResult.sizeKB,
+          dbImageSizeKB: dbCompressedResult.sizeKB,
+        },
+      }
+
+      return reply.status(201).send(response)
+    } catch (error: any) {
+      const totalTime = Date.now() - totalStartTime
+      console.error(`❌ [BULK OCR] Erro após ${totalTime}ms:`, error.message)
       throw error
     }
   }

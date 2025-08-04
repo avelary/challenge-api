@@ -12,6 +12,8 @@ async function productsRoutes(fastify) {
     fastify.post('/generate-ai', productsController.generateWithAI.bind(productsController));
     // POST /products/generate-ai-multiple - Gerar produto com IA (múltiplas imagens)
     fastify.post('/generate-ai-multiple', productsController.generateWithMultipleAI.bind(productsController));
+    // POST /products/bulk-menu-ocr - NOVA FUNCIONALIDADE: Processar cardápio em massa via OCR
+    fastify.post('/bulk-menu-ocr', productsController.processBulkMenuOCR.bind(productsController));
     // GET /products - Listar produtos
     fastify.get('/', productsController.index.bind(productsController));
     // DELETE /products/:idsku - Deletar produto
